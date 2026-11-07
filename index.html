@@ -71,6 +71,12 @@ input[type=text],input[type=password]{width:100%;padding:12px;border:1px solid v
     <input type="text" id="dept" required>
     <p class="err" id="eDept"></p>
 
+    <div id="phoneWrap" class="hidden">
+      <label for="phone">رقم الواتساب</label>
+      <input type="tel" id="phone" dir="ltr" placeholder="مثال: 01012345678" inputmode="numeric" maxlength="11" autocomplete="tel">
+      <p class="err" id="ePhone"></p>
+    </div>
+
     <label for="pass">الباسورد</label>
     <div class="pw">
       <input type="password" id="pass" required autocomplete="off">
@@ -106,7 +112,7 @@ const showDate = s => { const p=String(s).split('/'); return p.length===3 ? (+p[
 const status=(t,c)=>{ const s=$('#status'); s.textContent=t||''; s.className='status '+(c||''); };
 const banner=(t,bad)=>{ const b=$('#banner'); if(!t){b.classList.add('hidden');return;} b.textContent=t; b.className='banner'+(bad?' bad':''); };
 
-let session={title:'',date:''}, canSend=false;
+let session={title:'',date:''}, canSend=false, phoneOn=false;
 
 /* ---- بيانات المحاضرة (الاسم والتاريخ يحددهما المالك) ---- */
 async function loadConfig(){
@@ -115,6 +121,9 @@ async function loadConfig(){
     const r=await fetch(URL_+'?action=config'); const c=await r.json();
     if(!c.active){ $('#sub').textContent='لا توجد محاضرة حاليًا'; banner('لم يبدأ المعلم تسجيل الحضور بعد. حاول لاحقًا.',true); return; }
     session={title:c.title,date:c.date};
+    phoneOn=!!c.phoneOn;
+    $('#phoneWrap').classList.toggle('hidden',!phoneOn);
+    $('#phone').required=phoneOn;
     $('#title').textContent=c.title; document.title=c.title+' - '+showDate(c.date);
     $('#sub').textContent=showDate(c.date);
     if(!c.open){ banner('تم إغلاق التسجيل لهذه المحاضرة.',true); return; }
@@ -128,7 +137,7 @@ loadConfig();
 
 /* ---- تذكّر الاسم والفرقة والقسم (دون الباسورد) ---- */
 const KEY='att-profile';
-try{ const p=JSON.parse(localStorage.getItem(KEY)||'{}'); $('#name').value=p.name||''; $('#grade').value=p.grade||''; $('#dept').value=p.dept||''; }catch(e){}
+try{ const p=JSON.parse(localStorage.getItem(KEY)||'{}'); $('#name').value=p.name||''; $('#grade').value=p.grade||''; $('#dept').value=p.dept||''; $('#phone').value=p.phone||''; }catch(e){}
 
 $('#eye').onclick=()=>{ const i=$('#pass'),h=i.type==='password'; i.type=h?'text':'password'; $('#eye').textContent=h?'إخفاء':'إظهار'; };
 const clearErr=()=>document.querySelectorAll('.err').forEach(e=>e.textContent='');
@@ -176,15 +185,16 @@ async function deviceId(){
   return id;
 }
 
-const ERR={'device-used':'تم تسجيل حضور من هذا الجهاز في هذه المحاضرة بالفعل، ولا يُسمح بأكثر من تسجيل واحد لكل جهاز.','no-device':'تعذّر التعرف على الجهاز. حدّث الصفحة وأعد المحاولة.',closed:'تم إغلاق التسجيل لهذه المحاضرة.','no-session':'لا توجد محاضرة مفتوحة حاليًا.',missing:'أكمل جميع الحقول.',location:'تعذّر قراءة الموقع، أعد المحاولة.'};
+const ERR={phone:'رقم الواتساب يجب أن يكون 11 رقمًا، تأكد من كتابته وأعد المحاولة.','outside-zone':'موقعك الحالي خارج النطاق المسموح للتسجيل في هذه المحاضرة. اقترب من مكان المحاضرة وأعد المحاولة.','device-used':'تم تسجيل حضور من هذا الجهاز في هذه المحاضرة بالفعل، ولا يُسمح بأكثر من تسجيل واحد لكل جهاز.','no-device':'تعذّر التعرف على الجهاز. حدّث الصفحة وأعد المحاولة.',closed:'تم إغلاق التسجيل لهذه المحاضرة.','no-session':'لا توجد محاضرة مفتوحة حاليًا.',missing:'أكمل جميع الحقول.',location:'تعذّر قراءة الموقع، أعد المحاولة.'};
 
 $('#form').addEventListener('submit',async ev=>{
   ev.preventDefault(); clearErr(); status('');
-  const name=$('#name').value.trim(), grade=$('#grade').value.trim(), dept=$('#dept').value.trim(), pass=$('#pass').value;
+  const name=$('#name').value.trim(), grade=$('#grade').value.trim(), dept=$('#dept').value.trim(), phone=$('#phone').value.trim(), pass=$('#pass').value;
   let bad=false;
   if(!name){ $('#eName').textContent='اكتب اسم الطالب'; bad=true; }
   if(!grade){ $('#eGrade').textContent='اكتب الفرقة الدراسية'; bad=true; }
   if(!dept){ $('#eDept').textContent='اكتب القسم'; bad=true; }
+  if(phoneOn && phone.replace(/\D/g,'').length!==11){ $('#ePhone').textContent='اكتب رقم واتساب مكوّنًا من 11 رقمًا'; bad=true; }
   if(!pass){ $('#ePass').textContent='اكتب الباسورد'; bad=true; }
   if(bad||!canSend) return;
 
@@ -200,14 +210,14 @@ $('#form').addEventListener('submit',async ev=>{
     status('جارٍ إرسال البيانات...');
     const device=await deviceId();
     const j=await post({
-      name,grade,dept,password:pass,device,
+      name,grade,dept,phone,password:pass,device,
       lat:+pos.coords.latitude.toFixed(6), lng:+pos.coords.longitude.toFixed(6), acc:Math.round(pos.coords.accuracy)
     });
     if(!j.ok){
       if(j.error==='password'){ $('#ePass').textContent='الباسورد غير صحيح'; status(''); return; }
       throw new Error(ERR[j.error]||('رفض الخادم الطلب: '+j.error));
     }
-    try{ localStorage.setItem(KEY,JSON.stringify({name,grade,dept})); }catch(e){}
+    try{ localStorage.setItem(KEY,JSON.stringify({name,grade,dept,phone})); }catch(e){}
     $('#form').classList.add('hidden'); $('#done').classList.remove('hidden');
     $('#doneH').textContent=j.duplicate?'تم تسجيل حضورك مسبقًا':'تم إرسال البيانات';
     $('#doneTxt').textContent=name+' - '+session.title+' - '+showDate(session.date);

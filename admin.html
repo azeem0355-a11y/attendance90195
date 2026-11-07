@@ -20,7 +20,13 @@ h1{margin:0 0 14px;font-size:26px;font-weight:800}
 label{display:block;font-weight:700;margin:12px 0 4px;font-size:15px}
 input[type=text],input[type=password],input[type=number],input[type=email],select{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;background:#fbfcfc;min-height:46px}
 .date{display:grid;grid-template-columns:1fr 1.6fr 1.2fr;gap:8px}
+.zone{border:1px solid var(--line);border-radius:8px;padding:12px;margin-top:10px;background:#fbfcfc}
+.zone .zt{font-weight:700;margin-bottom:6px}
+.zone .zrow{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:8px 0}
+.zone .zm{margin-right:8px;font-size:14px;font-weight:700}
 .hint{color:var(--muted);font-size:14px;margin:3px 0 0}
+.chk{display:flex;align-items:center;gap:8px;margin:14px 0 0;font-weight:700;cursor:pointer}
+.chk input{width:18px;height:18px}
 .btn{border:0;border-radius:8px;padding:11px 16px;font-weight:700;cursor:pointer;background:var(--teal);color:#fff;min-height:46px}
 .btn:hover{background:var(--teal-d)}
 .btn[disabled]{background:#8aa6a5;cursor:default}
@@ -70,6 +76,8 @@ input[type=text],input[type=password],input[type=number],input[type=email],selec
           <span class="count"><span id="cCount">0</span><small>طالب مسجّل</small></span>
         </div>
         <p class="hint" id="cAuto"></p>
+        <p class="hint" id="cZone"></p>
+        <p class="hint" id="cPhone"></p>
         <div class="btns">
           <button class="btn danger" id="bClose" type="button">إغلاق التسجيل وإرسال Excel</button>
           <button class="btn alt" id="bSend" type="button">إرسال Excel الآن</button>
@@ -97,6 +105,17 @@ input[type=text],input[type=password],input[type=number],input[type=email],selec
       <label for="mins">إغلاق التسجيل تلقائيًا بعد (بالدقائق)</label>
       <input type="number" id="mins" min="0" placeholder="اتركه فارغًا ليبقى مفتوحًا حتى تغلقه أنت">
       <p class="hint">عند الإغلاق التلقائي يصلك ملف Excel على الإيميل دون أن تفعل شيئًا.</p>
+      <label>النطاق الجغرافي (اختياري، حتى نطاقين)</label>
+      <p class="hint">حدّد مكان المحاضرة. يُقبل الطالب إن كان داخل أي من النطاقين. اترك الحقول فارغة لعدم استخدام نطاق. يُحفظ آخر إعداد ويظهر تلقائيًا في المحاضرة التالية.</p>
+      <div id="zones"></div>
+      <label for="zmode">عند تسجيل طالب من خارج النطاق</label>
+      <select id="zmode">
+        <option value="flag">اقبل تسجيله ووسمه «خارج النطاق» في الملف</option>
+        <option value="block">امنع تسجيله</option>
+      </select>
+      <p class="hint">دقة GPS داخل المباني قد تصل إلى 20–50 مترًا، فاجعل المسافة 80 مترًا أو أكثر. ويُضاف للمسافة هامش يساوي دقة الجهاز (حتى 50 م). ولا يمنع هذا تزييف الموقع ببرامج خاصة، لكنه يصعّب الغش ويكشفه.</p>
+      <label class="chk"><input type="checkbox" id="pw"> طلب رقم واتساب الطالب (11 رقمًا)</label>
+      <p class="hint">عند التفعيل تظهر خانة رقم الواتساب في صفحة الطلاب وتكون إلزامية، ويُضاف عمود «رقم الواتساب» في الشيت وملف Excel. وإن تركته غير مفعّل لا تظهر الخانة إطلاقًا. يُحفظ آخر اختيار ويُقترح تلقائيًا في المحاضرة التالية.</p>
       <label for="spw">باسورد الطلاب</label>
       <input type="text" id="spw" placeholder="اتركه فارغًا للإبقاء على الباسورد الحالي">
       <label for="em">الإيميل الذي يصله الملف</label>
@@ -125,6 +144,48 @@ fill($('#d'),Array.from({length:31},(_,i)=>[i+1,i+1]),now.getDate());
 fill($('#m'),months.map((t,i)=>[i+1,t]),now.getMonth()+1);
 fill($('#y'),[now.getFullYear()-1,now.getFullYear(),now.getFullYear()+1].map(v=>[v,v]),now.getFullYear());
 
+/* ---- النطاقات الجغرافية ---- */
+const zoneBox=$('#zones');
+[1,2].forEach(i=>{
+  zoneBox.insertAdjacentHTML('beforeend',`<div class="zone">
+    <div class="zt">النطاق ${i}</div>
+    <input type="text" class="zn" placeholder="اسم النطاق (مثال: مدرج أ)" aria-label="اسم النطاق ${i}">
+    <div class="zrow">
+      <input type="number" step="any" class="za" placeholder="خط العرض" dir="ltr" aria-label="خط العرض ${i}">
+      <input type="number" step="any" class="zo" placeholder="خط الطول" dir="ltr" aria-label="خط الطول ${i}">
+      <input type="number" min="1" class="zr" placeholder="المسافة (م)" dir="ltr" aria-label="المسافة بالمتر ${i}">
+    </div>
+    <button type="button" class="btn alt zh">استخدم موقعي الحالي</button><span class="zm"></span>
+  </div>`);
+});
+document.querySelectorAll('.zone').forEach(z=>{
+  z.querySelector('.zh').onclick=()=>{
+    const m=z.querySelector('.zm'); m.className='zm'; m.textContent='جارٍ تحديد الموقع...';
+    if(!navigator.geolocation){ m.className='zm err'; m.style.color='var(--red)'; m.textContent='المتصفح لا يدعم تحديد الموقع'; return; }
+    navigator.geolocation.getCurrentPosition(p=>{
+      z.querySelector('.za').value=p.coords.latitude.toFixed(6);
+      z.querySelector('.zo').value=p.coords.longitude.toFixed(6);
+      if(!z.querySelector('.zr').value) z.querySelector('.zr').value=100;
+      m.style.color='var(--green)'; m.textContent='تم (دقة الجهاز ±'+Math.round(p.coords.accuracy)+' م)';
+    },()=>{ m.style.color='var(--red)'; m.textContent='تعذّر تحديد الموقع. اسمح للمتصفح بالوصول إليه.'; },{enableHighAccuracy:true,timeout:20000});
+  };
+});
+function getZones(){
+  return [...document.querySelectorAll('.zone')].map(z=>({name:z.querySelector('.zn').value.trim(),lat:z.querySelector('.za').value,lng:z.querySelector('.zo').value,r:z.querySelector('.zr').value}))
+    .filter(z=>z.lat!==''||z.lng!==''||z.r!=='');
+}
+let zonesFilled=false;
+function fillPhoneDefault(v){ if(typeof v==='boolean') $('#pw').checked=v; }
+function fillZones(def){
+  if(zonesFilled||!def) return; zonesFilled=true;
+  const zs=def.zones||[];
+  document.querySelectorAll('.zone').forEach((z,i)=>{
+    const d=zs[i]; if(!d) return;
+    z.querySelector('.zn').value=d.name||''; z.querySelector('.za').value=d.lat; z.querySelector('.zo').value=d.lng; z.querySelector('.zr').value=d.r;
+  });
+  if(def.mode) $('#zmode').value=def.mode;
+}
+
 async function api(op,extra){
   if(!URL_) throw new Error('لم يتم ضبط SCRIPT_URL في ملف config.js');
   let res;
@@ -138,6 +199,8 @@ async function api(op,extra){
 function render(st){
   const s=st.session;
   $('#em').value=$('#em').value||st.email||'';
+  fillZones(st.zoneDefaults);
+  fillPhoneDefault(st.phoneDefault);
   $('#noSess').classList.toggle('hidden',!!s);
   $('#sess').classList.toggle('hidden',!s);
   if(!s) return;
@@ -146,6 +209,9 @@ function render(st){
   $('#cCount').textContent=st.count;
   const b=$('#cState'); b.textContent=s.open?'التسجيل مفتوح':'التسجيل مغلق'; b.className='badge '+(s.open?'on':'off');
   $('#cAuto').textContent=(s.open&&s.closeAt)?'يُغلق تلقائيًا الساعة '+new Date(s.closeAt).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'}):'';
+  const zs=s.zones||[];
+  $('#cZone').textContent=zs.length?('النطاق الجغرافي: '+zs.map(z=>z.name+' ('+z.r+' م)').join('، ')+' - '+(s.zoneMode==='block'?'يُمنع التسجيل من خارجه.':'يُوسم من يسجّل من خارجه.')):'النطاق الجغرافي: غير مستخدم.';
+  $('#cPhone').textContent='رقم الواتساب: '+(s.phoneOn?'مطلوب من كل طالب.':'غير مطلوب.');
   $('#bClose').classList.toggle('hidden',!s.open);
   $('#bOpen').classList.toggle('hidden',!!s.open);
   $('#lnk').value=new URL('index.html',location.href).href;
@@ -181,7 +247,7 @@ $('#start').onclick=()=>act($('#start'),'جارٍ البدء...',async()=>{
   if(!title) throw new Error('اكتب اسم المحاضرة');
   const st=await api('start',{
     title,date:String(dd).padStart(2,'0')+'/'+String(mm).padStart(2,'0')+'/'+yy,
-    minutes:Number($('#mins').value)||0, studentPassword:$('#spw').value.trim(), email:$('#em').value.trim()
+    minutes:Number($('#mins').value)||0, zones:getZones(), zoneMode:$('#zmode').value, phoneOn:$('#pw').checked, studentPassword:$('#spw').value.trim(), email:$('#em').value.trim()
   });
   render(st); $('#title').value=''; $('#spw').value='';
   msg('بدأت المحاضرة. انسخ رابط الطلاب وأرسله لهم.','ok');
